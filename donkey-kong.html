@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>H vs G - Kong</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #game-container {
+            width: 600px;
+            height: 700px;
+            background-color: #000;
+            border: 5px solid #555;
+            position: relative;
+            overflow: hidden;
+        }
+        .platform {
+            position: absolute;
+            width: 100%;
+            height: 20px;
+            background-image: linear-gradient(to right, #d32f2f, #b71c1c);
+            border-top: 4px solid #ff5252;
+            border-bottom: 4px solid #7f0000;
+        }
+        /* Defining the level structure */
+        #p1 { bottom: 100px; transform: skewY(-4deg); }
+        #p2 { bottom: 220px; transform: skewY(4deg); }
+        #p3 { bottom: 340px; transform: skewY(-4deg); }
+        #p4 { bottom: 460px; transform: skewY(4deg); }
+        #p5 { bottom: 580px; width: 60%; left: 20%; transform: skewY(-4deg); } /* Kong's platform */
+
+        .ladder {
+            position: absolute;
+            width: 30px;
+            background-image: repeating-linear-gradient(
+                #8d6e63 0, #8d6e63 5px, /* rung color */
+                transparent 5px, transparent 20px /* space */
+            );
+            border-left: 5px solid #5d4037;
+            border-right: 5px solid #5d4037;
+        }
+        /* Defining ladder positions */
+        #l1 { bottom: 120px; left: 450px; height: 100px; }
+        #l2 { bottom: 240px; left: 150px; height: 100px; }
+        #l3 { bottom: 360px; left: 400px; height: 100px; }
+        #l4 { bottom: 480px; left: 200px; height: 100px; }
+
+        #player {
+            position: absolute;
+            width: 24px;
+            height: 32px;
+            background-image: linear-gradient(to bottom, #42a5f5, #1e88e5);
+            border: 2px solid #90caf9;
+            border-radius: 8px;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.5);
+            /* JS will set top/left */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            color: #fff;
+            font-weight: bold;
+        }
+        #kong {
+            position: absolute;
+            width: 48px;
+            height: 48px;
+            background-image: linear-gradient(to bottom, #795548, #4e342e);
+            border: 3px solid #a1887f;
+            border-radius: 12px;
+            box-shadow: 0 5px 8px rgba(0,0,0,0.5);
+            top: 535px; /* On platform 5 */
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            color: #d7ccc8;
+        }
+        .barrel {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            background-image: radial-gradient(circle at 8px 8px, #bcaaa4, #8d6e63);
+            border-radius: 50%;
+            border: 3px solid #5d4037;
+        }
+        #ui-bar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 1.5rem;
+            text-shadow: 2px 2px 3px #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="platform-container">
+            <div id="p1" class="platform"></div>
+            <div id="p2" class="platform"></div>
+            <div id="p3" class="platform"></div>
+            <div id="p4" class="platform"></div>
+            <div id="p5" class="platform"></div>
+        </div>
+        <div id="ladder-container">
+            <div id="l1" class="ladder"></div>
+            <div id="l2" class="ladder"></div>
+            <div id="l3" class="ladder"></div>
+            <div id="l4" class="ladder"></div>
+        </div>
+        <div id="player">H</div>
+        <div id="kong">G</div>
+    </div>
+    <div id="ui-bar">
+        <span>SCORE: <span id="score">0</span></span>
+        <span style="margin-left: 20px;">LIVES: <span id="lives">3</span></span>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const gameContainer = $('#game-container');
+            const player = $('#player');
+            const platforms = $('.platform');
+            const ladders = $('.ladder');
+
+            const gravity = 0.5;
+            const moveSpeed = 3;
+            const jumpForce = -12;
+            const climbSpeed = 2;
+
+            let playerPos = { x: 50, y: 121 };
+            let playerVel = { x: 0, y: 0 };
+
+            let onGround = false;
+            let isJumping = false;
+            let onLadder = false;
+
+            const keys = {};
+
+            $(document).on('keydown', e => { keys[e.key] = true; });
+            $(document).on('keyup', e => { keys[e.key] = false; });
+
+            function gameLoop() {
+                handleInput();
+                updatePlayer();
+                requestAnimationFrame(gameLoop);
+            }
+
+            function handleInput() {
+                playerVel.x = 0;
+                if (keys['ArrowLeft']) {
+                    playerVel.x = -moveSpeed;
+                }
+                if (keys['ArrowRight']) {
+                    playerVel.x = moveSpeed;
+                }
+                if (keys[' '] && onGround && !isJumping) {
+                    playerVel.y = jumpForce;
+                    isJumping = true;
+                    onGround = false;
+                }
+
+                // Ladder controls
+                let canClimb = false;
+                ladders.each(function() {
+                    if (isColliding(player, $(this))) {
+                        canClimb = true;
+                    }
+                });
+
+                onLadder = canClimb;
+                if (onLadder) {
+                    if (keys['ArrowUp']) {
+                        playerVel.y = -climbSpeed;
+                    } else if (keys['ArrowDown']) {
+                        playerVel.y = climbSpeed;
+                    } else if(!isJumping) {
+                        playerVel.y = 0; // Stop vertical movement if on ladder and not moving
+                    }
+                }
+            }
+
+            function updatePlayer() {
+                // Apply gravity if not on a ladder or if jumping on a ladder
+                if (!onLadder || isJumping) {
+                    playerVel.y += gravity;
+                }
+
+                playerPos.x += playerVel.x;
+                playerPos.y += playerVel.y;
+
+                onGround = false;
+
+                // Platform collision
+                platforms.each(function() {
+                    const p = $(this);
+                    const pTop = p.position().top;
+
+                    // Skewed platform position adjustment
+                    const skewAngle = (p.css('transform').includes('skewY(-4deg)')) ? -4 : 4;
+                    const adjustedPlayerY = playerPos.y + player.height();
+                    let platformYatPlayerX = pTop - Math.tan(skewAngle * Math.PI / 180) * (playerPos.x - p.position().left);
+
+                    if (
+                        playerVel.y >= 0 &&
+                        adjustedPlayerY >= platformYatPlayerX &&
+                        adjustedPlayerY <= platformYatPlayerX + 20 &&
+                        playerPos.x + player.width() > p.position().left &&
+                        playerPos.x < p.position().left + p.width()
+                    ) {
+                        playerVel.y = 0;
+                        playerPos.y = platformYatPlayerX - player.height();
+                        onGround = true;
+                        isJumping = false;
+                    }
+                });
+
+                // Prevent falling through the absolute bottom
+                if (playerPos.y > gameContainer.height() - player.height()) {
+                    playerPos.y = gameContainer.height() - player.height();
+                    playerVel.y = 0;
+                    onGround = true;
+                    isJumping = false;
+                }
+
+                player.css({ left: `${playerPos.x}px`, top: `${playerPos.y}px` });
+            }
+
+            function isColliding(div1, div2) {
+                const rect1 = div1[0].getBoundingClientRect();
+                const rect2 = div2[0].getBoundingClientRect();
+                return !(rect1.right < rect2.left ||
+                         rect1.left > rect2.right ||
+                         rect1.bottom < rect2.top ||
+                         rect1.top > rect2.bottom);
+            }
+
+            let barrels = [];
+            const barrelSpeed = 2.5;
+
+            function spawnBarrel() {
+                const kongPos = $('#kong').position();
+                const barrel = $('<div class="barrel"></div>');
+                barrel.css({ left: kongPos.left + 50, top: kongPos.top + 10});
+                gameContainer.append(barrel);
+                barrels.push({
+                    element: barrel,
+                    pos: { x: kongPos.left + 50, y: kongPos.top + 10 },
+                    vel: { x: barrelSpeed, y: 0 }
+                });
+            }
+
+            function updateBarrels() {
+                barrels.forEach((b, index) => {
+                    let onPlatform = false;
+
+                    // Apply gravity
+                    b.vel.y += gravity;
+
+                    // Platform collision for barrels
+                    platforms.each(function() {
+                        const p = $(this);
+                        const pTop = p.position().top;
+                        const skewAngle = (p.css('transform').includes('skewY(-4deg)')) ? -4 : 4;
+                        const adjustedBarrelY = b.pos.y + b.element.height();
+                        let platformYatBarrelX = pTop - Math.tan(skewAngle * Math.PI / 180) * (b.pos.x - p.position().left);
+
+                        if (
+                            b.vel.y >= 0 &&
+                            adjustedBarrelY >= platformYatBarrelX &&
+                            adjustedBarrelY <= platformYatBarrelX + 20 &&
+                            b.pos.x + b.element.width() > p.position().left &&
+                            b.pos.x < p.position().left + p.width()
+                        ) {
+                            b.vel.y = 0;
+                            b.pos.y = platformYatBarrelX - b.element.height();
+                            onPlatform = true;
+                            // Set rolling direction based on platform skew
+                            b.vel.x = skewAngle > 0 ? -barrelSpeed : barrelSpeed;
+                        }
+                    });
+
+                    b.pos.x += b.vel.x;
+                    b.pos.y += b.vel.y;
+
+                    b.element.css({ left: `${b.pos.x}px`, top: `${b.pos.y}px` });
+
+                    // Remove barrel if it falls off screen
+                    if (b.pos.y > gameContainer.height()) {
+                        b.element.remove();
+                        barrels.splice(index, 1);
+                    }
+                });
+            }
+
+
+            // Set initial player position
+            player.css({ left: `${playerPos.x}px`, top: `${playerPos.y}px` });
+
+            let score = 0;
+            let lives = 3;
+            let gameOver = false;
+            let animationFrameId;
+
+            function checkCollisions() {
+                if (gameOver) return;
+
+                // Player vs Barrels
+                barrels.forEach(barrel => {
+                    if (isColliding(player, barrel.element)) {
+                        lives--;
+                        $('#lives').text(lives);
+                        barrel.element.remove(); // remove the barrel that hit the player
+                        // find a way to remove from array too
+
+                        if (lives <= 0) {
+                            triggerGameOver("GAME OVER");
+                        } else {
+                            // Reset player position
+                            playerPos = { x: 50, y: 121 };
+                        }
+                    }
+                });
+
+                // Player vs Kong (Win Condition)
+                if (isColliding(player, $('#kong'))) {
+                    triggerGameOver("YOU WIN!");
+                }
+            }
+
+            function triggerGameOver(message) {
+                gameOver = true;
+                cancelAnimationFrame(animationFrameId);
+                const endScreen = $('<div id="game-over-screen"></div>').html(`<div>${message}</div>`);
+                gameContainer.append(endScreen.css('display', 'flex'));
+            }
+
+            // Add barrel logic to game loop
+            function gameLoop() {
+                if (gameOver) return;
+                handleInput();
+                updatePlayer();
+                updateBarrels();
+                checkCollisions();
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+
+            setInterval(spawnBarrel, 4000);
+            animationFrameId = requestAnimationFrame(gameLoop);
+        });
+    </script>
+</body>
+</html>

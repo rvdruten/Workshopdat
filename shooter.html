@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>H vs G - Shooter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #000;
+            color: #ececec;
+            font-family: 'Press Start 2P', cursive;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #game-container {
+            border: 4px solid #909090;
+            width: 600px;
+            height: 500px;
+            position: relative;
+            background-color: #000;
+            perspective: 800px;
+        }
+        #game-screen {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            transform-style: preserve-3d;
+            transform: rotateX(50deg);
+        }
+        #ui-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 5px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 1rem;
+            background-color: #404040;
+        }
+        #player {
+            position: absolute;
+            bottom: 30px;
+            width: 20px;
+            height: 20px;
+            font-size: 20px;
+            line-height: 20px; /* Vertically center text */
+            text-align: center;
+            color: #fff;
+            background-image: linear-gradient(to bottom, #84e4e4, #7cd0ac);
+            box-shadow: 0px 25px 15px rgba(0,0,0,0.4);
+            transform: translateZ(10px);
+        }
+        .enemy {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            font-size: 20px;
+            line-height: 20px; /* Vertically center text */
+            text-align: center;
+            color: #000;
+            background-image: linear-gradient(to bottom, #fcfc68, #e8cc7c);
+            box-shadow: 0px 25px 15px rgba(0,0,0,0.4);
+            transform: translateZ(10px);
+        }
+        .bullet {
+            position: absolute;
+            width: 4px;
+            height: 12px;
+            background-image: linear-gradient(to bottom, #c05858, #880000);
+            box-shadow: 0px 25px 15px rgba(0,0,0,0.4);
+            transform: translateZ(10px);
+        }
+        #game-over-screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-screen">
+            <div id="player">H</div>
+            <!-- Enemies and bullets will be added dynamically by JS -->
+        </div>
+        <div id="ui-bar">
+            <span>SCORE: <span id="score">0</span></span>
+            <span>LIVES: <span id="lives">3</span></span>
+        </div>
+        <div id="game-over-screen">
+            <div>
+                GAME OVER
+                <p style="font-size: 1rem;">Press F5 to restart</p>
+            </div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const gameScreen = $('#game-screen');
+            const player = $('#player');
+
+            const playerSpeed = 5;
+            const bulletSpeed = 7;
+            const gameScreenWidth = gameScreen.width();
+
+            let playerX = gameScreenWidth / 2 - player.width() / 2;
+            player.css('left', `${playerX}px`);
+
+            const keys = {};
+
+            $(document).on('keydown', function(e) {
+                keys[e.key] = true;
+            });
+
+            $(document).on('keyup', function(e) {
+                keys[e.key] = false;
+                if (e.key === ' ') {
+                    fireBullet();
+                }
+            });
+
+            function updatePlayer() {
+                if (keys['ArrowLeft'] && playerX > 0) {
+                    playerX -= playerSpeed;
+                }
+                if (keys['ArrowRight'] && playerX < gameScreenWidth - player.width()) {
+                    playerX += playerSpeed;
+                }
+                player.css('left', `${playerX}px`);
+            }
+
+            function fireBullet() {
+                // Only allow one bullet on screen at a time for simplicity
+                if ($('.bullet').length === 0) {
+                    const bullet = $('<div class="bullet"></div>');
+                    bullet.css({
+                        left: `${playerX + player.width() / 2 - 2}px`,
+                        bottom: `${player.height() + 20}px`
+                    });
+                    gameScreen.append(bullet);
+                }
+            }
+
+            function updateBullets() {
+                $('.bullet').each(function() {
+                    const bullet = $(this);
+                    const currentBottom = parseFloat(bullet.css('bottom'));
+                    const newBottom = currentBottom + bulletSpeed;
+
+                    if (newBottom > gameScreen.height()) {
+                        bullet.remove();
+                    } else {
+                        bullet.css('bottom', `${newBottom}px`);
+                    }
+                });
+            }
+
+            let score = 0;
+            let lives = 3;
+            let gameOver = false;
+            let gameInterval;
+
+            let enemies = [];
+            const enemyRows = 4;
+            const enemyCols = 8;
+            let enemySpeed = 1;
+            let enemyDirection = 'right';
+
+            function createEnemies() {
+                enemies.forEach(e => e.remove());
+                enemies = [];
+                for (let row = 0; row < enemyRows; row++) {
+                    for (let col = 0; col < enemyCols; col++) {
+                        const enemy = $('<div class="enemy">G</div>');
+                        const x = col * 40 + 50;
+                        const y = row * 40 + 30;
+                        enemy.css({ top: `${y}px`, left: `${x}px` });
+                        gameScreen.append(enemy);
+                        enemies.push(enemy);
+                    }
+                }
+            }
+
+            function updateEnemies() {
+                let moveDown = false;
+                let newDirection = enemyDirection;
+
+                enemies.forEach(enemy => {
+                    const currentLeft = parseFloat(enemy.css('left'));
+                    if (enemyDirection === 'right') {
+                        if (currentLeft + enemySpeed > gameScreenWidth - enemy.width() - 5) {
+                            moveDown = true;
+                            newDirection = 'left';
+                        }
+                    } else {
+                        if (currentLeft - enemySpeed < 5) {
+                            moveDown = true;
+                            newDirection = 'right';
+                        }
+                    }
+                });
+
+                if (moveDown) {
+                    enemyDirection = newDirection;
+                    enemies.forEach(enemy => {
+                        const currentTop = parseFloat(enemy.css('top'));
+                        enemy.css('top', `${currentTop + 20}px`);
+                        if (currentTop + 20 > gameScreen.height() - player.height() - 30) {
+                            triggerGameOver();
+                        }
+                    });
+                } else {
+                    enemies.forEach(enemy => {
+                        const currentLeft = parseFloat(enemy.css('left'));
+                        enemy.css('left', `${currentLeft + (enemyDirection === 'right' ? enemySpeed : -enemySpeed)}px`);
+                    });
+                }
+            }
+
+            function checkCollisions() {
+                // Bullet and enemy collision
+                $('.bullet').each(function() {
+                    const bullet = $(this);
+                    const bulletPos = bullet[0].getBoundingClientRect();
+
+                    enemies.forEach((enemy, index) => {
+                        if (!enemy.parent().length) return; // Skip already removed enemies
+                        const enemyPos = enemy[0].getBoundingClientRect();
+
+                        if (
+                            bulletPos.left < enemyPos.left + enemyPos.width &&
+                            bulletPos.left + bulletPos.width > enemyPos.left &&
+                            bulletPos.top < enemyPos.top + enemyPos.height &&
+                            bulletPos.top + bulletPos.height > enemyPos.top
+                        ) {
+                            bullet.remove();
+                            enemy.remove();
+                            enemies.splice(index, 1);
+                            score += 10;
+                            $('#score').text(score);
+                        }
+                    });
+                });
+
+                // Check if all enemies are defeated
+                if (enemies.length === 0) {
+                    levelUp();
+                }
+            }
+
+            function levelUp() {
+                enemySpeed += 0.5;
+                createEnemies();
+            }
+
+            function triggerGameOver() {
+                gameOver = true;
+                clearInterval(gameInterval);
+                $('#game-over-screen').css('display', 'flex');
+            }
+
+            function gameLoop() {
+                if (gameOver) return;
+                updatePlayer();
+                updateBullets();
+                updateEnemies();
+                checkCollisions();
+            }
+
+            function startGame() {
+                createEnemies();
+                gameInterval = setInterval(gameLoop, 1000 / 60); // 60 FPS
+            }
+
+            startGame();
+        });
+    </script>
+</body>
+</html>
