@@ -2,25 +2,34 @@
 <html>
 <head>
     <title>Pac-Man</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         body {
-            background-color: #000;
-            color: #fff;
-            font-family: 'Courier New', Courier, monospace;
+            background-color: #000000;
+            color: #ececec;
+            font-family: 'Press Start 2P', cursive;
             text-align: center;
         }
 
         #game-container {
-            margin: 0 auto;
-            border: 2px solid blue;
+            margin: 10px auto;
+            border: 4px solid #140084;
             width: fit-content;
             padding: 10px;
+            background-color: #000;
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: #fcfc68;
+            text-shadow: 2px 2px #880000;
         }
 
         #game-board {
             display: grid;
-            /* The grid dimensions will be set by JS */
-            border: 2px solid blue;
+            border: 4px solid #140084;
             margin: 20px auto;
         }
 
@@ -28,50 +37,77 @@
             width: 20px;
             height: 20px;
             box-sizing: border-box;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 18px; /* Default font size for characters */
         }
 
         .wall {
-            background-color: blue;
+            background-color: #140084;
+        }
+
+        .pellet {
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .pellet::after {
-            content: '·';
-            color: #fff;
-            font-size: 30px;
-            line-height: 20px;
+            content: '';
+            display: block;
+            width: 6px;
+            height: 6px;
+            background-color: #ececec;
         }
 
         .pacman {
-            font-family: 'Times New Roman', Times, serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
             font-weight: bold;
-            font-style: italic;
-            font-size: 22px;
-            color: yellow;
-            text-shadow: 0 0 5px yellow;
+            color: #880000; /* Red as requested for Pac-Man */
         }
 
         .ghost {
-            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
             font-weight: bold;
         }
 
-        .ghost.red { color: red; }
-        .ghost.pink { color: pink; }
-        .ghost.cyan { color: cyan; }
-        .ghost.orange { color: orange; }
+        /* Ghost colors are applied to the text */
+        .ghost.red { color: #fcfc68; } /* Yellow, to contrast with red Pac-Man */
+        .ghost.pink { color: #d084c0; }
+        .ghost.cyan { color: #7cd0ac; }
+        .ghost.orange { color: #eca880; }
 
-        #score-container {
-            font-size: 24px;
+        #score-container, #game-over {
+            font-size: 1rem;
+            margin-top: 10px;
+            color: #ececec;
+        }
+
+        #game-controls {
+            margin-top: 20px;
+        }
+
+        #start-pause-btn, #d-pad button {
+            background-color: #404040;
+            color: #ececec;
+            border: 2px solid #909090;
+            font-family: 'Press Start 2P', cursive;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        #start-pause-btn:hover, #d-pad button:hover {
+            background-color: #6c6c6c;
+        }
+
+        #d-pad {
             margin-top: 10px;
         }
 
-        #game-over {
-            margin-top: 20px;
-        }
     </style>
 </head>
 <body>
@@ -80,6 +116,16 @@
         <div id="game-board"></div>
         <div id="score-container">
             Score: <span id="score">0</span>
+        </div>
+        <div id="game-controls">
+            <button id="start-pause-btn">Start</button>
+            <div id="d-pad">
+                <button id="up-btn">▲</button>
+                <br>
+                <button id="left-btn">◄</button>
+                <button id="down-btn">▼</button>
+                <button id="right-btn">►</button>
+            </div>
         </div>
         <div id="game-over" style="display: none;">
             <h2>Game Over</h2>
@@ -119,11 +165,16 @@
                 { x: 11, y: 7, dir: 'down', color: 'orange' },
             ];
 
+            let gameState = 'stopped'; // 'stopped', 'running', 'paused', 'over'
+            let gameLoop;
+
             const gameBoard = $('#game-board');
             gameBoard.css('grid-template-columns', `repeat(${boardWidth}, 20px)`);
             gameBoard.css('grid-template-rows', `repeat(${boardHeight}, 20px)`);
 
             function createBoard() {
+                gameBoard.empty();
+                totalPellets = 0;
                 for (let y = 0; y < boardHeight; y++) {
                     for (let x = 0; x < boardWidth; x++) {
                         const cell = $('<div>').addClass('cell').attr('data-x', x).attr('data-y', y);
@@ -141,17 +192,29 @@
             }
 
             function drawCharacters() {
+                // Clear previous character positions
                 $('.pacman').removeClass('pacman').html('');
+                $('.ghost').removeClass('ghost red pink cyan orange').html('');
+
+                // Draw Pac-Man
                 getCell(pacman.x, pacman.y).addClass('pacman').html('H');
 
-                $('.ghost').removeClass('ghost red pink cyan orange').html('');
+                // Draw Ghosts
                 ghosts.forEach(g => {
-                    getCell(g.x, g.y).addClass(`ghost ${g.color}`).html('H');
+                    getCell(g.x, g.y).addClass(`ghost ${g.color}`).html('G');
                 });
             }
 
             function getCell(x, y) {
                 return $(`.cell[data-x='${x}'][data-y='${y}']`);
+            }
+
+            function gameTick() {
+                movePacman();
+                moveGhosts();
+                drawCharacters();
+                checkCollisions();
+                checkWin();
             }
 
             function movePacman() {
@@ -205,36 +268,79 @@
             function checkCollisions() {
                 ghosts.forEach(g => {
                     if (pacman.x === g.x && pacman.y === g.y) {
-                        clearInterval(gameLoop);
-                        $('#game-over').show();
+                        endGame('Game Over');
                     }
                 });
             }
 
             function checkWin() {
                 if (totalPellets === 0) {
-                    clearInterval(gameLoop);
-                    $('#game-over h2').text('You Win!');
-                    $('#game-over').show();
+                    endGame('You Win!');
+                }
+            }
+
+            function endGame(message) {
+                clearInterval(gameLoop);
+                gameState = 'over';
+                $('#game-over h2').text(message);
+                $('#game-over').show();
+                $('#start-pause-btn').text('Restart').prop('disabled', false);
+            }
+
+            function setDirection(dir) {
+                if(gameState === 'running') {
+                    pacman.dir = dir;
                 }
             }
 
             $(document).keydown(function(e) {
-                if (e.key === 'ArrowLeft') pacman.dir = 'left';
-                else if (e.key === 'ArrowRight') pacman.dir = 'right';
-                else if (e.key === 'ArrowUp') pacman.dir = 'up';
-                else if (e.key === 'ArrowDown') pacman.dir = 'down';
+                if (e.key === 'ArrowLeft') setDirection('left');
+                else if (e.key === 'ArrowRight') setDirection('right');
+                else if (e.key === 'ArrowUp') setDirection('up');
+                else if (e.key === 'ArrowDown') setDirection('down');
             });
 
+            $('#up-btn').on('click', () => setDirection('up'));
+            $('#down-btn').on('click', () => setDirection('down'));
+            $('#left-btn').on('click', () => setDirection('left'));
+            $('#right-btn').on('click', () => setDirection('right'));
+
+            $('#start-pause-btn').on('click', function() {
+                const btn = $(this);
+                if (gameState === 'stopped' || gameState === 'over') {
+                    // Start game
+                    gameState = 'running';
+                    btn.text('Pause');
+                    $('#game-over').hide();
+                    // Reset game state
+                    score = 0;
+                    $('#score').text(score);
+                    pacman = { x: 1, y: 13, dir: 'right' };
+                    ghosts = [
+                        { x: 8, y: 7, dir: 'down', color: 'red' },
+                        { x: 9, y: 7, dir: 'down', color: 'pink' },
+                        { x: 10, y: 7, dir: 'down', color: 'cyan' },
+                        { x: 11, y: 7, dir: 'down', color: 'orange' },
+                    ];
+                    createBoard(); // Re-create board to reset pellets
+                    drawCharacters();
+                    gameLoop = setInterval(gameTick, 300);
+                } else if (gameState === 'running') {
+                    // Pause game
+                    gameState = 'paused';
+                    btn.text('Resume');
+                    clearInterval(gameLoop);
+                } else if (gameState === 'paused') {
+                    // Resume game
+                    gameState = 'running';
+                    btn.text('Pause');
+                    gameLoop = setInterval(gameTick, 300);
+                }
+            });
+
+            // Initial setup
             createBoard();
             drawCharacters();
-            const gameLoop = setInterval(() => {
-                movePacman();
-                moveGhosts();
-                drawCharacters();
-                checkCollisions();
-                checkWin();
-            }, 300);
         });
     </script>
 </body>
