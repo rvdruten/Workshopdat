@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pac-Man</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: center;
+        }
+
+        #game-container {
+            margin: 0 auto;
+            border: 2px solid blue;
+            width: fit-content;
+            padding: 10px;
+        }
+
+        #game-board {
+            display: grid;
+            /* The grid dimensions will be set by JS */
+            border: 2px solid blue;
+            margin: 20px auto;
+        }
+
+        .cell {
+            width: 20px;
+            height: 20px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px; /* Default font size for characters */
+        }
+
+        .wall {
+            background-color: blue;
+        }
+
+        .pellet::after {
+            content: '·';
+            color: #fff;
+            font-size: 30px;
+            line-height: 20px;
+        }
+
+        .pacman {
+            font-family: 'Times New Roman', Times, serif;
+            font-weight: bold;
+            font-style: italic;
+            font-size: 22px;
+            color: yellow;
+            text-shadow: 0 0 5px yellow;
+        }
+
+        .ghost {
+            font-family: 'Arial', sans-serif;
+            font-weight: bold;
+        }
+
+        .ghost.red { color: red; }
+        .ghost.pink { color: pink; }
+        .ghost.cyan { color: cyan; }
+        .ghost.orange { color: orange; }
+
+        #score-container {
+            font-size: 24px;
+            margin-top: 10px;
+        }
+
+        #game-over {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>H-Pac</h1>
+        <div id="game-board"></div>
+        <div id="score-container">
+            Score: <span id="score">0</span>
+        </div>
+        <div id="game-over" style="display: none;">
+            <h2>Game Over</h2>
+            <p>Refresh to play again</p>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const boardWidth = 20;
+            const boardHeight = 15;
+            const boardLayout = [
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
+                [1,0,1,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
+                [1,0,1,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,1,0,1],
+                [1,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,1],
+                [1,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,1],
+                [1,1,1,1,0,1,0,0,0,0,0,0,0,0,1,0,1,1,1,1],
+                [1,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,1],
+                [1,0,1,1,1,0,1,1,1,1,1,1,1,1,0,1,1,1,0,1],
+                [1,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,0,1],
+                [1,0,1,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
+                [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            ];
+
+            let score = 0;
+            let totalPellets = 0;
+            let pacman = { x: 1, y: 13, dir: 'right' };
+            let ghosts = [
+                { x: 8, y: 7, dir: 'down', color: 'red' },
+                { x: 9, y: 7, dir: 'down', color: 'pink' },
+                { x: 10, y: 7, dir: 'down', color: 'cyan' },
+                { x: 11, y: 7, dir: 'down', color: 'orange' },
+            ];
+
+            const gameBoard = $('#game-board');
+            gameBoard.css('grid-template-columns', `repeat(${boardWidth}, 20px)`);
+            gameBoard.css('grid-template-rows', `repeat(${boardHeight}, 20px)`);
+
+            function createBoard() {
+                for (let y = 0; y < boardHeight; y++) {
+                    for (let x = 0; x < boardWidth; x++) {
+                        const cell = $('<div>').addClass('cell').attr('data-x', x).attr('data-y', y);
+                        if (boardLayout[y][x] === 1) {
+                            cell.addClass('wall');
+                        } else {
+                            if(boardLayout[y][x] === 0) {
+                                cell.addClass('pellet');
+                                totalPellets++;
+                            }
+                        }
+                        gameBoard.append(cell);
+                    }
+                }
+            }
+
+            function drawCharacters() {
+                $('.pacman').removeClass('pacman').html('');
+                getCell(pacman.x, pacman.y).addClass('pacman').html('H');
+
+                $('.ghost').removeClass('ghost red pink cyan orange').html('');
+                ghosts.forEach(g => {
+                    getCell(g.x, g.y).addClass(`ghost ${g.color}`).html('H');
+                });
+            }
+
+            function getCell(x, y) {
+                return $(`.cell[data-x='${x}'][data-y='${y}']`);
+            }
+
+            function movePacman() {
+                let nextX = pacman.x;
+                let nextY = pacman.y;
+
+                if (pacman.dir === 'left') nextX--;
+                else if (pacman.dir === 'right') nextX++;
+                else if (pacman.dir === 'up') nextY--;
+                else if (pacman.dir === 'down') nextY++;
+
+                if (nextX < 0) nextX = boardWidth -1;
+                if (nextX >= boardWidth) nextX = 0;
+
+                if (boardLayout[nextY][nextX] !== 1) {
+                    pacman.x = nextX;
+                    pacman.y = nextY;
+                }
+
+                if (getCell(pacman.x, pacman.y).hasClass('pellet')) {
+                    getCell(pacman.x, pacman.y).removeClass('pellet');
+                    boardLayout[pacman.y][pacman.x] = 2; // Mark as eaten
+                    score++;
+                    totalPellets--;
+                    $('#score').text(score);
+                }
+            }
+
+            function moveGhosts() {
+                ghosts.forEach(g => {
+                    const possibleMoves = [];
+                    const { x, y } = g;
+
+                    if (boardLayout[y - 1][x] !== 1) possibleMoves.push('up');
+                    if (boardLayout[y + 1][x] !== 1) possibleMoves.push('down');
+                    if (boardLayout[y][x - 1] !== 1 && (x-1 > 0)) possibleMoves.push('left');
+                    if (boardLayout[y][x + 1] !== 1 && (x+1 < boardWidth -1)) possibleMoves.push('right');
+
+                    const oppositeDir = { up: 'down', down: 'up', left: 'right', right: 'left' };
+                    const filteredMoves = possibleMoves.filter(m => m !== oppositeDir[g.dir]);
+
+                    g.dir = filteredMoves.length > 0 ? filteredMoves[Math.floor(Math.random() * filteredMoves.length)] : possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+
+                    if (g.dir === 'left') g.x--;
+                    else if (g.dir === 'right') g.x++;
+                    else if (g.dir === 'up') g.y--;
+                    else if (g.dir === 'down') g.y++;
+                });
+            }
+
+            function checkCollisions() {
+                ghosts.forEach(g => {
+                    if (pacman.x === g.x && pacman.y === g.y) {
+                        clearInterval(gameLoop);
+                        $('#game-over').show();
+                    }
+                });
+            }
+
+            function checkWin() {
+                if (totalPellets === 0) {
+                    clearInterval(gameLoop);
+                    $('#game-over h2').text('You Win!');
+                    $('#game-over').show();
+                }
+            }
+
+            $(document).keydown(function(e) {
+                if (e.key === 'ArrowLeft') pacman.dir = 'left';
+                else if (e.key === 'ArrowRight') pacman.dir = 'right';
+                else if (e.key === 'ArrowUp') pacman.dir = 'up';
+                else if (e.key === 'ArrowDown') pacman.dir = 'down';
+            });
+
+            createBoard();
+            drawCharacters();
+            const gameLoop = setInterval(() => {
+                movePacman();
+                moveGhosts();
+                drawCharacters();
+                checkCollisions();
+                checkWin();
+            }, 300);
+        });
+    </script>
+</body>
+</html>
