@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Maze Solver</title>
+    <style>
+        #maze {
+            border-collapse: collapse;
+            margin: 20px;
+        }
+
+        #maze td {
+            width: 20px;
+            height: 20px;
+            font-size: 0;
+        }
+
+        .wall {
+            background-color: black;
+        }
+
+        .passage {
+            background-color: white;
+        }
+
+        .start {
+            background-color: green;
+        }
+
+        .end {
+            background-color: red;
+        }
+
+        .solution-path {
+            background-color: lightblue;
+        }
+
+        .dead-end {
+            background-color: orange;
+        }
+    </style>
+</head>
+<body>
+    <h1>Maze Solver</h1>
+    <div id="maze-container"></div>
+    <button id="generate-button">New Maze</button>
+    <button id="solve-button">Solve Maze</button>
+    <button id="mark-dead-ends-button">Mark Dead Ends</button>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const mazeGenerator = {
+                width: 21,
+                height: 11,
+                complexity: 10,
+                grid: [],
+
+                initializeGrid: function() {
+                    this.grid = [];
+                    for (let y = 0; y < this.height; y++) {
+                        this.grid[y] = [];
+                        for (let x = 0; x < this.width; x++) {
+                            this.grid[y][x] = 1; // 1 for wall
+                        }
+                    }
+                },
+
+                generate: function() {
+                    this.initializeGrid();
+                    this.carvePassages(1, 1);
+                    this.addComplexity();
+                    this.grid[1][1] = 'S'; // Start
+                    this.grid[this.height - 2][this.width - 2] = 'E'; // End
+                },
+
+                carvePassages: function(cx, cy) {
+                    this.grid[cy][cx] = 0;
+                    const directions = [[0, -2], [0, 2], [2, 0], [-2, 0]];
+                    directions.sort(() => Math.random() - 0.5);
+                    directions.forEach(d => {
+                        const nx = cx + d[0];
+                        const ny = cy + d[1];
+                        if (nx > 0 && nx < this.width - 1 && ny > 0 && ny < this.height - 1 && this.grid[ny][nx] === 1) {
+                            this.grid[cy + d[1] / 2][cx + d[0] / 2] = 0;
+                            this.grid[ny][nx] = 0;
+                            this.carvePassages(nx, ny);
+                        }
+                    });
+                },
+
+                addComplexity: function() {
+                    for (let i = 0; i < this.complexity; i++) {
+                        const x = Math.floor(Math.random() * (this.width - 2)) + 1;
+                        const y = Math.floor(Math.random() * (this.height - 2)) + 1;
+                        if (this.grid[y][x] === 1) {
+                            this.grid[y][x] = 0;
+                        }
+                    }
+                },
+
+                display: function() {
+                    const mazeContainer = $('#maze-container');
+                    mazeContainer.empty();
+                    const table = $('<table id="maze"></table>');
+                    for (let y = 0; y < this.height; y++) {
+                        const row = $('<tr></tr>');
+                        for (let x = 0; x < this.width; x++) {
+                            const cellData = this.grid[y][x];
+                            let cellClass = '';
+                            let openWalls = '';
+                            switch (cellData) {
+                                case 1: cellClass = 'wall'; break;
+                                case 0: case 'S': case 'E':
+                                    cellClass = 'passage';
+                                    if (cellData === 'S') cellClass += ' start';
+                                    if (cellData === 'E') cellClass += ' end';
+                                    if (y > 0 && this.grid[y - 1][x] !== 1) openWalls += 'N';
+                                    if (y < this.height - 1 && this.grid[y + 1][x] !== 1) openWalls += 'S';
+                                    if (x > 0 && this.grid[y][x - 1] !== 1) openWalls += 'W';
+                                    if (x < this.width - 1 && this.grid[y][x + 1] !== 1) openWalls += 'E';
+                                    break;
+                            }
+                            const cell = $(`<td id="cell-${x}-${y}" class="${cellClass}" data-x="${x}" data-y="${y}" data-open="${openWalls}"></td>`);
+                            row.append(cell);
+                        }
+                        table.append(row);
+                    }
+                    mazeContainer.append(table);
+                }
+            };
+
+            function getNeighbors(cellId) {
+                const neighbors = [];
+                const cell = $('#' + cellId);
+                if (!cell.length) return neighbors;
+                const x = parseInt(cell.data('x'));
+                const y = parseInt(cell.data('y'));
+                const openWalls = cell.data('open') || '';
+                if (openWalls.includes('N')) neighbors.push(`cell-${x}-${y - 1}`);
+                if (openWalls.includes('S')) neighbors.push(`cell-${x}-${y + 1}`);
+                if (openWalls.includes('W')) neighbors.push(`cell-${x - 1}-${y}`);
+                if (openWalls.includes('E')) neighbors.push(`cell-${x + 1}-${y}`);
+                return neighbors;
+            }
+
+            function bfs(start, end) {
+                const queue = [];
+                const visited = new Set();
+                const parent = {};
+                const startId = start.attr('id');
+                const endId = end.attr('id');
+                queue.push(startId);
+                visited.add(startId);
+                while (queue.length > 0) {
+                    const currentId = queue.shift();
+                    if (currentId === endId) {
+                        let path = [];
+                        let current = endId;
+                        while (current) {
+                            path.unshift(current);
+                            current = parent[current];
+                        }
+                        return path;
+                    }
+                    const neighbors = getNeighbors(currentId);
+                    neighbors.forEach(neighborId => {
+                        if (!visited.has(neighborId)) {
+                            visited.add(neighborId);
+                            parent[neighborId] = currentId;
+                            queue.push(neighborId);
+                        }
+                    });
+                }
+                return null;
+            }
+
+            $('#mark-dead-ends-button').on('click', function() {
+                $('.passage').each(function() {
+                    const cellId = $(this).attr('id');
+                    if (getNeighbors(cellId).length === 1) {
+                        if (!$(this).hasClass('start') && !$(this).hasClass('end')) {
+                            $(this).addClass('dead-end');
+                        }
+                    }
+                });
+            });
+
+            $('#solve-button').on('click', function() {
+                $('.solution-path').removeClass('solution-path');
+                $('.dead-end').removeClass('dead-end');
+                const startCell = $('.start');
+                const endCell = $('.end');
+                const path = bfs(startCell, endCell);
+                if (path) {
+                    let i = 0;
+                    const interval = setInterval(function() {
+                        if (i < path.length) {
+                            $('#' + path[i]).addClass('solution-path');
+                            i++;
+                        } else {
+                            clearInterval(interval);
+                        }
+                    }, 50);
+                } else {
+                    alert('No path found!');
+                }
+            });
+
+            function newMaze() {
+                mazeGenerator.generate();
+                mazeGenerator.display();
+            }
+
+            $('#generate-button').on('click', newMaze);
+
+            newMaze(); // Initial maze
+        });
+    </script>
+</body>
+</html>
