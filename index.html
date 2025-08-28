@@ -9,8 +9,6 @@
         }
 
         #maze td {
-            width: 20px;
-            height: 20px;
             font-size: 0;
         }
 
@@ -41,6 +39,16 @@
 </head>
 <body>
     <h1>Maze Solver</h1>
+    <div>
+        <label for="size-slider">Maze Size:</label>
+        <input type="range" id="size-slider" min="5" max="51" value="21" step="2">
+        <span id="size-value">21</span>
+    </div>
+    <div>
+        <label for="cell-size-slider">Cell Size (px):</label>
+        <input type="range" id="cell-size-slider" min="5" max="40" value="20">
+        <span id="cell-size-value">20</span>
+    </div>
     <div id="maze-container"></div>
     <button id="generate-button">New Maze</button>
     <button id="solve-button">Solve Maze</button>
@@ -49,9 +57,11 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script>
         $(document).ready(function() {
+            let solverInterval = null;
+
             const mazeGenerator = {
                 width: 21,
-                height: 11,
+                height: 21,
                 complexity: 10,
                 grid: [],
 
@@ -129,6 +139,21 @@
                 }
             };
 
+            $('#size-slider').on('input', function() {
+                const size = $(this).val();
+                $('#size-value').text(size);
+            });
+
+            $('#cell-size-slider').on('input', function() {
+                const cellSize = $(this).val();
+                $('#cell-size-value').text(cellSize);
+                let style = $('#dynamic-style');
+                if (style.length === 0) {
+                    style = $('<style id="dynamic-style"></style>').appendTo('head');
+                }
+                style.text(`#maze td { width: ${cellSize}px; height: ${cellSize}px; }`);
+            }).trigger('input');
+
             function getNeighbors(cellId) {
                 const neighbors = [];
                 const cell = $('#' + cellId);
@@ -186,6 +211,7 @@
             });
 
             $('#solve-button').on('click', function() {
+                clearInterval(solverInterval);
                 $('.solution-path').removeClass('solution-path');
                 $('.dead-end').removeClass('dead-end');
                 const startCell = $('.start');
@@ -193,12 +219,12 @@
                 const path = bfs(startCell, endCell);
                 if (path) {
                     let i = 0;
-                    const interval = setInterval(function() {
+                    solverInterval = setInterval(function() {
                         if (i < path.length) {
                             $('#' + path[i]).addClass('solution-path');
                             i++;
                         } else {
-                            clearInterval(interval);
+                            clearInterval(solverInterval);
                         }
                     }, 50);
                 } else {
@@ -207,8 +233,13 @@
             });
 
             function newMaze() {
+                clearInterval(solverInterval);
+                const size = parseInt($('#size-slider').val());
+                mazeGenerator.width = size;
+                mazeGenerator.height = size;
                 mazeGenerator.generate();
                 mazeGenerator.display();
+                $('#cell-size-slider').trigger('input');
             }
 
             $('#generate-button').on('click', newMaze);
