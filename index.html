@@ -3,37 +3,43 @@
 <head>
     <title>Maze Solver</title>
     <style>
-        #maze {
-            border-collapse: collapse;
-            margin: 20px;
+        body {
+            background-color: #333;
+            color: white;
         }
-
+        #maze {
+            border: 5px solid #444;
+            border-radius: 5px;
+            background-color: #666; /* The "floor" of the maze */
+            border-collapse: collapse;
+        }
         #maze td {
             font-size: 0;
         }
-
         .wall {
-            background-color: black;
+            background-color: #888;
+            border-top: 1px solid #aaa;
+            border-left: 1px solid #aaa;
+            border-bottom: 1px solid #555;
+            border-right: 1px solid #555;
         }
-
         .passage {
-            background-color: white;
+            background-color: #ccc;
+            box-shadow: inset 2px 2px 4px rgba(0,0,0,0.4);
         }
-
         .start {
-            background-color: green;
+            background-color: #2a9d8f; /* A nice teal color */
         }
-
         .end {
-            background-color: red;
+            background-color: #e76f51; /* A nice coral color */
         }
-
         .solution-path {
-            background-color: lightblue;
+            background-color: #e9c46a; /* A nice gold color */
+            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.2);
         }
-
         .dead-end {
-            background-color: orange;
+            background-color: #f4a261; /* A nice sandy orange */
+            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.2);
         }
     </style>
 </head>
