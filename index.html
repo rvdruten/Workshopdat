@@ -65,23 +65,34 @@
         #solve-button { background-color: #e9c46a; }    /* Gold */
         #mark-dead-ends-button { background-color: #f4a261; } /* Sandy Orange */
         #reset-button { background-color: #e76f51; }    /* Coral */
+        #controls-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 10px;
+            background-color: #444;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
-    <div>
-        <label for="size-slider">Maze Size:</label>
-        <input type="range" id="size-slider" min="5" max="51" value="21" step="2">
-        <span id="size-value">21</span>
-    </div>
-    <div>
-        <label for="cell-size-slider">Cell Size (px):</label>
-        <input type="range" id="cell-size-slider" min="5" max="40" value="20">
-        <span id="cell-size-value">20</span>
-    </div>
-    <div>
-        <label for="complexity-slider">Complexity:</label>
-        <input type="range" id="complexity-slider" min="0" max="50" value="10">
-        <span id="complexity-value">10</span>
+    <div id="controls-container">
+        <div>
+            <label for="size-slider">Maze Size:</label>
+            <input type="range" id="size-slider" min="5" max="51" value="21" step="2">
+            <span id="size-value">21</span>
+        </div>
+        <div>
+            <label for="cell-size-slider">Cell Size (px):</label>
+            <input type="range" id="cell-size-slider" min="5" max="40" value="20">
+            <span id="cell-size-value">20</span>
+        </div>
+        <div>
+            <label for="complexity-slider">Complexity:</label>
+            <input type="range" id="complexity-slider" min="0" max="50" value="10">
+            <span id="complexity-value">10</span>
+        </div>
     </div>
     <div id="maze-container"></div>
     <button id="generate-button">New Maze</button>
