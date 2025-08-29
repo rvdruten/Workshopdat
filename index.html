@@ -41,10 +41,33 @@
             background-color: #f4a261; /* A nice sandy orange */
             box-shadow: inset 1px 1px 3px rgba(0,0,0,0.2);
         }
+        .visited {
+            background-color: #5d5d5d;
+            transition: background-color 0.5s;
+        }
+        .frontier {
+            background-color: #8d8d8d;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 5px;
+            transition: transform 0.1s ease;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        #generate-button { background-color: #2a9d8f; } /* Teal */
+        #solve-button { background-color: #e9c46a; }    /* Gold */
+        #mark-dead-ends-button { background-color: #f4a261; } /* Sandy Orange */
+        #reset-button { background-color: #e76f51; }    /* Coral */
     </style>
 </head>
 <body>
-    <h1>Maze Solver</h1>
     <div>
         <label for="size-slider">Maze Size:</label>
         <input type="range" id="size-slider" min="5" max="51" value="21" step="2">
@@ -55,15 +78,22 @@
         <input type="range" id="cell-size-slider" min="5" max="40" value="20">
         <span id="cell-size-value">20</span>
     </div>
+    <div>
+        <label for="complexity-slider">Complexity:</label>
+        <input type="range" id="complexity-slider" min="0" max="50" value="10">
+        <span id="complexity-value">10</span>
+    </div>
     <div id="maze-container"></div>
     <button id="generate-button">New Maze</button>
     <button id="solve-button">Solve Maze</button>
     <button id="mark-dead-ends-button">Mark Dead Ends</button>
+    <button id="reset-button">Reset</button>
 
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script>
         $(document).ready(function() {
-            let solverInterval = null;
+            let explorationInterval = null;
+            let pathInterval = null;
 
             const mazeGenerator = {
                 width: 21,
@@ -150,6 +180,11 @@
                 $('#size-value').text(size);
             });
 
+            $('#complexity-slider').on('input', function() {
+                const complexity = $(this).val();
+                $('#complexity-value').text(complexity);
+            });
+
             $('#cell-size-slider').on('input', function() {
                 const cellSize = $(this).val();
                 $('#cell-size-value').text(cellSize);
@@ -174,7 +209,7 @@
                 return neighbors;
             }
 
-            function bfs(start, end) {
+            function animated_bfs(start, end, onComplete) {
                 const queue = [];
                 const visited = new Set();
                 const parent = {};
@@ -182,27 +217,42 @@
                 const endId = end.attr('id');
                 queue.push(startId);
                 visited.add(startId);
-                while (queue.length > 0) {
-                    const currentId = queue.shift();
-                    if (currentId === endId) {
-                        let path = [];
-                        let current = endId;
-                        while (current) {
-                            path.unshift(current);
-                            current = parent[current];
+
+                explorationInterval = setInterval(function() {
+                    if (queue.length > 0) {
+                        const currentId = queue.shift();
+                        const cell = $('#' + currentId);
+                        if (!cell.hasClass('start') && !cell.hasClass('end')) {
+                            cell.addClass('visited').removeClass('frontier');
                         }
-                        return path;
+                        if (currentId === endId) {
+                            clearInterval(explorationInterval);
+                            let path = [];
+                            let current = endId;
+                            while (current) {
+                                path.unshift(current);
+                                current = parent[current];
+                            }
+                            onComplete(path);
+                            return;
+                        }
+                        const neighbors = getNeighbors(currentId);
+                        neighbors.forEach(neighborId => {
+                            if (!visited.has(neighborId)) {
+                                visited.add(neighborId);
+                                parent[neighborId] = currentId;
+                                queue.push(neighborId);
+                                const neighborCell = $('#' + neighborId);
+                                if (!neighborCell.hasClass('start') && !neighborCell.hasClass('end')) {
+                                    neighborCell.addClass('frontier');
+                                }
+                            }
+                        });
+                    } else {
+                        clearInterval(explorationInterval);
+                        onComplete(null);
                     }
-                    const neighbors = getNeighbors(currentId);
-                    neighbors.forEach(neighborId => {
-                        if (!visited.has(neighborId)) {
-                            visited.add(neighborId);
-                            parent[neighborId] = currentId;
-                            queue.push(neighborId);
-                        }
-                    });
-                }
-                return null;
+                }, 20);
             }
 
             $('#mark-dead-ends-button').on('click', function() {
@@ -217,32 +267,45 @@
             });
 
             $('#solve-button').on('click', function() {
-                clearInterval(solverInterval);
-                $('.solution-path').removeClass('solution-path');
-                $('.dead-end').removeClass('dead-end');
+                clearInterval(explorationInterval);
+                clearInterval(pathInterval);
+                $('.solution-path, .dead-end, .visited, .frontier').removeClass('solution-path dead-end visited frontier');
+
                 const startCell = $('.start');
                 const endCell = $('.end');
-                const path = bfs(startCell, endCell);
-                if (path) {
-                    let i = 0;
-                    solverInterval = setInterval(function() {
-                        if (i < path.length) {
-                            $('#' + path[i]).addClass('solution-path');
-                            i++;
-                        } else {
-                            clearInterval(solverInterval);
-                        }
-                    }, 50);
-                } else {
-                    alert('No path found!');
-                }
+
+                animated_bfs(startCell, endCell, function(path) {
+                    if (path) {
+                        let i = 0;
+                        pathInterval = setInterval(function() {
+                            if (i < path.length) {
+                                $('.visited, .frontier').removeClass('visited frontier');
+                                $('#' + path[i]).addClass('solution-path');
+                                i++;
+                            } else {
+                                clearInterval(pathInterval);
+                            }
+                        }, 50);
+                    } else {
+                        alert('No path found!');
+                    }
+                });
+            });
+
+            $('#reset-button').on('click', function() {
+                clearInterval(explorationInterval);
+                clearInterval(pathInterval);
+                $('.solution-path, .dead-end, .visited, .frontier').removeClass('solution-path dead-end visited frontier');
             });
 
             function newMaze() {
-                clearInterval(solverInterval);
+                clearInterval(explorationInterval);
+                clearInterval(pathInterval);
                 const size = parseInt($('#size-slider').val());
+                const complexity = parseInt($('#complexity-slider').val());
                 mazeGenerator.width = size;
                 mazeGenerator.height = size;
+                mazeGenerator.complexity = complexity;
                 mazeGenerator.generate();
                 mazeGenerator.display();
                 $('#cell-size-slider').trigger('input');
