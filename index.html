@@ -96,6 +96,11 @@
     </div>
     <div id="maze-container"></div>
     <button id="generate-button">New Maze</button>
+    <select id="solve-algorithm">
+        <option value="bfs">BFS</option>
+        <option value="dfs">DFS</option>
+        <option value="a_star">A*</option>
+    </select>
     <button id="solve-button">Solve Maze</button>
     <button id="mark-dead-ends-button">Mark Dead Ends</button>
     <button id="reset-button">Reset</button>
@@ -266,6 +271,135 @@
                 }, 20);
             }
 
+            function animated_a_star(start, end, onComplete) {
+                const openSet = [];
+                const closedSet = new Set();
+                const parent = {};
+                const gScore = {};
+                const fScore = {};
+
+                const startId = start.attr('id');
+                const endId = end.attr('id');
+                const startX = parseInt(start.data('x'));
+                const startY = parseInt(start.data('y'));
+                const endX = parseInt(end.data('x'));
+                const endY = parseInt(end.data('y'));
+
+                function heuristic(x, y) {
+                    return Math.abs(x - endX) + Math.abs(y - endY);
+                }
+
+                gScore[startId] = 0;
+                fScore[startId] = heuristic(startX, startY);
+                openSet.push({ id: startId, f: fScore[startId] });
+
+                explorationInterval = setInterval(function() {
+                    if (openSet.length > 0) {
+                        openSet.sort((a, b) => a.f - b.f);
+                        const current = openSet.shift();
+                        const currentId = current.id;
+                        const cell = $('#' + currentId);
+
+                        if (currentId === endId) {
+                            clearInterval(explorationInterval);
+                            let path = [];
+                            let temp = currentId;
+                            while (temp) {
+                                path.unshift(temp);
+                                temp = parent[temp];
+                            }
+                            onComplete(path);
+                            return;
+                        }
+
+                        closedSet.add(currentId);
+                        if (!cell.hasClass('start') && !cell.hasClass('end')) {
+                            cell.addClass('visited').removeClass('frontier');
+                        }
+
+                        const neighbors = getNeighbors(currentId);
+                        neighbors.forEach(neighborId => {
+                            if (closedSet.has(neighborId)) {
+                                return;
+                            }
+
+                            const neighborCell = $('#' + neighborId);
+                            const neighborX = parseInt(neighborCell.data('x'));
+                            const neighborY = parseInt(neighborCell.data('y'));
+                            const tentativeGScore = gScore[currentId] + 1;
+
+                            let inOpenSet = openSet.some(node => node.id === neighborId);
+
+                            if (!inOpenSet || tentativeGScore < gScore[neighborId]) {
+                                parent[neighborId] = currentId;
+                                gScore[neighborId] = tentativeGScore;
+                                fScore[neighborId] = gScore[neighborId] + heuristic(neighborX, neighborY);
+
+                                if (!inOpenSet) {
+                                    openSet.push({ id: neighborId, f: fScore[neighborId] });
+                                    if (!neighborCell.hasClass('start') && !neighborCell.hasClass('end')) {
+                                        neighborCell.addClass('frontier');
+                                    }
+                                } else {
+                                    // Update f-score in openSet
+                                    const node = openSet.find(node => node.id === neighborId);
+                                    node.f = fScore[neighborId];
+                                }
+                            }
+                        });
+                    } else {
+                        clearInterval(explorationInterval);
+                        onComplete(null);
+                    }
+                }, 20);
+            }
+
+            function animated_dfs(start, end, onComplete) {
+                const stack = [];
+                const visited = new Set();
+                const parent = {};
+                const startId = start.attr('id');
+                const endId = end.attr('id');
+                stack.push(startId);
+                visited.add(startId);
+
+                explorationInterval = setInterval(function() {
+                    if (stack.length > 0) {
+                        const currentId = stack.pop(); // Use pop for LIFO (stack)
+                        const cell = $('#' + currentId);
+                        if (!cell.hasClass('start') && !cell.hasClass('end')) {
+                            cell.addClass('visited').removeClass('frontier');
+                        }
+                        if (currentId === endId) {
+                            clearInterval(explorationInterval);
+                            let path = [];
+                            let current = endId;
+                            while (current) {
+                                path.unshift(current);
+                                current = parent[current];
+                            }
+                            onComplete(path);
+                            return;
+                        }
+                        const neighbors = getNeighbors(currentId);
+                        neighbors.forEach(neighborId => {
+                            if (!visited.has(neighborId)) {
+                                visited.add(neighborId);
+                                parent[neighborId] = currentId;
+                                stack.push(neighborId);
+                                const neighborCell = $('#' + neighborId);
+                                if (!neighborCell.hasClass('start') && !neighborCell.hasClass('end')) {
+                                    neighborCell.addClass('frontier');
+                                }
+                            }
+                        });
+                    } else {
+                        clearInterval(explorationInterval);
+                        onComplete(null);
+                    }
+                }, 20);
+            }
+
             $('#mark-dead-ends-button').on('click', function() {
                 $('.passage').each(function() {
                     const cellId = $(this).attr('id');
@@ -284,8 +418,23 @@
 
                 const startCell = $('.start');
                 const endCell = $('.end');
+                const algorithm = $('#solve-algorithm').val();
 
-                animated_bfs(startCell, endCell, function(path) {
+                let solverFunction;
+                switch (algorithm) {
+                    case 'dfs':
+                        solverFunction = animated_dfs;
+                        break;
+                    case 'a_star':
+                        solverFunction = animated_a_star;
+                        break;
+                    case 'bfs':
+                    default:
+                        solverFunction = animated_bfs;
+                        break;
+                }
+
+                solverFunction(startCell, endCell, function(path) {
                     if (path) {
                         let i = 0;
                         pathInterval = setInterval(function() {
