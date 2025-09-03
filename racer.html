@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Split-Screen Racer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        #game-container {
+            width: 80vw;
+            height: 90vh;
+            border: 5px solid #555;
+            display: flex;
+            position: relative;
+        }
+        .viewport {
+            width: 50%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            background-color: #333;
+        }
+        #player1-viewport { border-right: 2px solid #fff; }
+        #player2-viewport { border-left: 2px solid #fff; }
+        .track {
+            position: absolute;
+            width: 100%;
+            height: 200%;
+            background-color: #424242;
+            background-image: repeating-linear-gradient(#616161 0, #616161 20px, transparent 20px, transparent 60px);
+            background-repeat: repeat-y;
+            background-position: center;
+        }
+        .car {
+            position: absolute;
+            width: 50px;
+            height: 90px;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 10px;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.5);
+            border: 2px solid #fff;
+            z-index: 10;
+        }
+        .obstacle {
+            position: absolute;
+            width: 80px;
+            height: 30px;
+            background-color: #a1887f;
+            border: 2px solid #5d4037;
+            border-radius: 5px;
+            z-index: 5;
+        }
+        #player1-car { background-image: linear-gradient(to top, #d32f2f, #ff5252); }
+        #player2-car { background-image: linear-gradient(to top, #1e88e5, #42a5f5); }
+        .ui-overlay {
+            position: absolute;
+            top: 10px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            font-size: 1.2rem;
+            text-shadow: 2px 2px 4px #000;
+        }
+        #winner-screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 3rem;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="player1-viewport" class="viewport">
+            <div class="track" id="track1"></div>
+            <div class="car" id="player1-car"></div>
+            <div class="ui-overlay">
+                <span>SPEED: <span id="speed1">0</span></span>
+                <span>LAP: <span id="lap1">0</span> / 3</span>
+            </div>
+        </div>
+        <div id="player2-viewport" class="viewport">
+            <div class="track" id="track2"></div>
+            <div class="car" id="player2-car"></div>
+            <div class="ui-overlay">
+                <span>SPEED: <span id="speed2">0</span></span>
+                <span>LAP: <span id="lap2">0</span> / 3</span>
+            </div>
+        </div>
+        <div id="winner-screen">
+            <div id="winner-text"></div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const keys = {};
+            $(document).on('keydown', e => { keys[e.key.toLowerCase()] = true; });
+            $(document).on('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+            const LAP_DISTANCE = 15000;
+            const TOTAL_LAPS = 3;
+            let gameOver = false;
+            let animationFrameId;
+
+            function createPlayer(id, controls) {
+                const viewport = $(`#player${id}-viewport`);
+                return {
+                    id: id,
+                    car: $(`#player${id}-car`),
+                    track: $(`#track${id}`),
+                    speedUI: $(`#speed${id}`),
+                    lapUI: $(`#lap${id}`),
+                    viewport: viewport,
+                    x: viewport.width() / 2,
+                    speed: 0,
+                    distance: 0,
+                    laps: 0,
+                    obstacles: [],
+                    controls: controls
+                };
+            }
+
+            const player1 = createPlayer(1, { up: 'w', down: 's', left: 'a', right: 'd' });
+            const player2 = createPlayer(2, { up: 'arrowup', down: 'arrowdown', left: 'arrowleft', right: 'arrowright' });
+            const players = [player1, player2];
+
+            const maxSpeed = 15;
+            const acceleration = 0.2;
+            const friction = 0.1;
+            const turnSpeed = 4;
+            const trackHeight = player1.track.height();
+
+            function updatePlayer(p) {
+                if (gameOver) return;
+                // Handle controls
+                if (keys[p.controls.up]) p.speed = Math.min(p.speed + acceleration, maxSpeed);
+                if (keys[p.controls.down]) p.speed = Math.max(p.speed - acceleration * 1.5, -5);
+                if (p.speed > 0) p.speed = Math.max(p.speed - friction, 0);
+                else if (p.speed < 0) p.speed = Math.min(p.speed + friction, 0);
+                if (keys[p.controls.left]) p.x = Math.max(p.x - turnSpeed, 0);
+                if (keys[p.controls.right]) p.x = Math.min(p.x + turnSpeed, p.viewport.width() - p.car.width());
+
+                // Update distance and laps
+                p.distance += p.speed;
+                if (p.distance >= LAP_DISTANCE) {
+                    p.distance -= LAP_DISTANCE;
+                    p.laps++;
+                    p.lapUI.text(p.laps);
+                    if (p.laps >= TOTAL_LAPS) {
+                        triggerGameOver(`PLAYER ${p.id} WINS!`);
+                    }
+                }
+
+                // Update CSS
+                p.car.css('left', `${p.x}px`);
+                p.speedUI.text(Math.round(p.speed * 10));
+                p.track.css('top', `${p.distance % (trackHeight / 2)}px`);
+            }
+
+            function maybeGenerateObstacle(p) {
+                if (p.speed > 5 && Math.random() < 0.02) {
+                    const obstacle = $('<div class="obstacle"></div>');
+                    const obsX = Math.random() * (p.viewport.width() - 80);
+                    const obsY = p.distance - p.viewport.height();
+                    p.viewport.append(obstacle);
+                    p.obstacles.push({ element: obstacle, x: obsX, y: obsY });
+                }
+            }
+
+            function updateObstacles(p) {
+                p.obstacles.forEach((obs, index) => {
+                    const screenY = obs.y - p.distance + p.viewport.height();
+                    if (screenY > p.viewport.height()) {
+                        obs.element.remove();
+                        p.obstacles.splice(index, 1);
+                        return;
+                    }
+                    obs.element.css({ top: `${screenY}px`, left: `${obs.x}px` });
+
+                    const carRect = p.car[0].getBoundingClientRect();
+                    const obsRect = obs.element[0].getBoundingClientRect();
+                    if (!(carRect.right < obsRect.left || carRect.left > obsRect.right || carRect.bottom < obsRect.top || carRect.top > obsRect.bottom)) {
+                        p.speed *= 0.5; // Slow down on hit
+                        obs.element.remove();
+                        p.obstacles.splice(index, 1);
+                    }
+                });
+            }
+
+            function triggerGameOver(winnerText) {
+                gameOver = true;
+                cancelAnimationFrame(animationFrameId);
+                $('#winner-text').text(winnerText);
+                $('#winner-screen').css('display', 'flex');
+            }
+
+            function gameLoop() {
+                players.forEach(p => {
+                    updatePlayer(p);
+                    maybeGenerateObstacle(p);
+                    updateObstacles(p);
+                });
+                if (!gameOver) {
+                    animationFrameId = requestAnimationFrame(gameLoop);
+                }
+            }
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        });
+    </script>
+</body>
+</html>
