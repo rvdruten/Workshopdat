@@ -26,6 +26,10 @@
         .passage {
             background-color: #ccc;
             box-shadow: inset 2px 2px 4px rgba(0,0,0,0.4);
+            transition: background-color 0.2s;
+        }
+        .hover-enabled .passage:hover {
+            background-color: #e0e0e0;
         }
         .start {
             background-color: #2a9d8f; /* A nice teal color */
@@ -35,7 +39,8 @@
         }
         .solution-path {
             background-color: #e9c46a; /* A nice gold color */
-            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.2);
+            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.2), 0 0 5px #e9c46a;
+            animation: glow 1.5s infinite alternate;
         }
         .dead-end {
             background-color: #f4a261; /* A nice sandy orange */
@@ -47,6 +52,19 @@
         }
         .frontier {
             background-color: #8d8d8d;
+            animation: pulse 1s infinite;
+        }
+        .carving {
+            background-color: #ffcc00;
+        }
+        @keyframes pulse {
+            0% { background-color: #8d8d8d; }
+            50% { background-color: #a3a3a3; }
+            100% { background-color: #8d8d8d; }
+        }
+        @keyframes glow {
+            from { box-shadow: inset 1px 1px 3px rgba(0,0,0,0.2), 0 0 5px #e9c46a; }
+            to { box-shadow: inset 1px 1px 3px rgba(0,0,0,0.2), 0 0 15px #e9c46a, 0 0 20px #e9c46a; }
         }
         button {
             padding: 10px 15px;
@@ -74,9 +92,20 @@
             border-radius: 5px;
             margin-bottom: 20px;
         }
+        #fog-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(circle 150px at 50% 50%, transparent, #000000dd 200px, #000000 300px);
+            display: none;
+        }
     </style>
 </head>
 <body>
+    <div id="fog-overlay"></div>
     <div id="controls-container">
         <div>
             <label for="size-slider">Maze Size:</label>
@@ -93,6 +122,22 @@
             <input type="range" id="complexity-slider" min="0" max="50" value="10">
             <span id="complexity-value">10</span>
         </div>
+    <div>
+        <label for="fog-toggle">Fog of War:</label>
+        <input type="checkbox" id="fog-toggle">
+    </div>
+    <div>
+        <label for="animate-gen-toggle">Animate Generation:</label>
+        <input type="checkbox" id="animate-gen-toggle" checked>
+    </div>
+    <div>
+        <label for="animate-solver-toggle">Animate Solver:</label>
+        <input type="checkbox" id="animate-solver-toggle" checked>
+    </div>
+    <div>
+        <label for="hover-toggle">Hover Highlight:</label>
+        <input type="checkbox" id="hover-toggle" checked>
+    </div>
     </div>
     <div id="maze-container"></div>
     <button id="generate-button">New Maze</button>
@@ -105,6 +150,7 @@
         $(document).ready(function() {
             let explorationInterval = null;
             let pathInterval = null;
+            let generationInterval = null;
 
             const mazeGenerator = {
                 width: 21,
@@ -126,8 +172,8 @@
                     this.initializeGrid();
                     this.carvePassages(1, 1);
                     this.addComplexity();
-                    this.grid[1][1] = 'S'; // Start
-                    this.grid[this.height - 2][this.width - 2] = 'E'; // End
+                    this.grid[1][1] = 'S';
+                    this.grid[this.height - 2][this.width - 2] = 'E';
                 },
 
                 carvePassages: function(cx, cy) {
@@ -143,6 +189,57 @@
                             this.carvePassages(nx, ny);
                         }
                     });
+                },
+
+                animatedGenerate: function() {
+                    this.initializeGrid();
+                    const stack = [];
+                    const startX = 1;
+                    const startY = 1;
+                    this.grid[startY][startX] = 0;
+                    stack.push([startX, startY]);
+
+                    this.display();
+
+                    generationInterval = setInterval(() => {
+                        if (stack.length > 0) {
+                            const [cx, cy] = stack[stack.length - 1];
+                            $('.carving').removeClass('carving');
+                            $(`#cell-${cx}-${cy}`).addClass('carving');
+
+                            const directions = [[0, -2], [0, 2], [2, 0], [-2, 0]];
+                            directions.sort(() => Math.random() - 0.5);
+
+                            let foundNeighbor = false;
+                            for (const d of directions) {
+                                const nx = cx + d[0];
+                                const ny = cy + d[1];
+
+                                if (nx > 0 && nx < this.width - 1 && ny > 0 && ny < this.height - 1 && this.grid[ny][nx] === 1) {
+                                    this.grid[cy + d[1] / 2][cx + d[0] / 2] = 0;
+                                    this.grid[ny][nx] = 0;
+
+                                    $(`#cell-${cx + d[0] / 2}-${cy + d[1] / 2}`).removeClass('wall').addClass('passage');
+                                    $(`#cell-${nx}-${ny}`).removeClass('wall').addClass('passage');
+
+                                    stack.push([nx, ny]);
+                                    foundNeighbor = true;
+                                    break;
+                                }
+                            }
+
+                            if (!foundNeighbor) {
+                                stack.pop();
+                            }
+                        } else {
+                            clearInterval(generationInterval);
+                            $('.carving').removeClass('carving');
+                            this.addComplexity();
+                            this.grid[1][1] = 'S';
+                            this.grid[this.height - 2][this.width - 2] = 'E';
+                            this.display();
+                        }
+                    }, 10);
                 },
 
                 addComplexity: function() {
@@ -183,6 +280,7 @@
                         table.append(row);
                     }
                     mazeContainer.append(table);
+                    $('#hover-toggle').trigger('change');
                 }
             };
 
@@ -194,6 +292,26 @@
             $('#complexity-slider').on('input', function() {
                 const complexity = $(this).val();
                 $('#complexity-value').text(complexity);
+            });
+
+            $('#fog-toggle').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#fog-overlay').show();
+                } else {
+                    $('#fog-overlay').hide();
+                }
+            });
+
+            $('#hover-toggle').on('change', function() {
+                $('#maze-container').toggleClass('hover-enabled', $(this).is(':checked'));
+            }).trigger('change');
+
+            $(document).on('mousemove', function(e) {
+                if ($('#fog-toggle').is(':checked')) {
+                    $('#fog-overlay').css({
+                        background: `radial-gradient(circle 150px at ${e.pageX}px ${e.pageY}px, transparent, #000000dd 200px, #000000 300px)`
+                    });
+                }
             });
 
             $('#cell-size-slider').on('input', function() {
@@ -218,6 +336,37 @@
                 if (openWalls.includes('W')) neighbors.push(`cell-${x - 1}-${y}`);
                 if (openWalls.includes('E')) neighbors.push(`cell-${x + 1}-${y}`);
                 return neighbors;
+            }
+
+            function bfs(start, end) {
+                const queue = [];
+                const visited = new Set();
+                const parent = {};
+                const startId = start.attr('id');
+                const endId = end.attr('id');
+                queue.push(startId);
+                visited.add(startId);
+                while (queue.length > 0) {
+                    const currentId = queue.shift();
+                    if (currentId === endId) {
+                        let path = [];
+                        let current = endId;
+                        while (current) {
+                            path.unshift(current);
+                            current = parent[current];
+                        }
+                        return path;
+                    }
+                    const neighbors = getNeighbors(currentId);
+                    neighbors.forEach(neighborId => {
+                        if (!visited.has(neighborId)) {
+                            visited.add(neighborId);
+                            parent[neighborId] = currentId;
+                            queue.push(neighborId);
+                        }
+                    });
+                }
+                return null;
             }
 
             function animated_bfs(start, end, onComplete) {
@@ -285,22 +434,33 @@
                 const startCell = $('.start');
                 const endCell = $('.end');
 
-                animated_bfs(startCell, endCell, function(path) {
+                if ($('#animate-solver-toggle').is(':checked')) {
+                    animated_bfs(startCell, endCell, function(path) {
+                        if (path) {
+                            let i = 0;
+                            pathInterval = setInterval(function() {
+                                if (i < path.length) {
+                                    $('.visited, .frontier').removeClass('visited frontier');
+                                    $('#' + path[i]).addClass('solution-path');
+                                    i++;
+                                } else {
+                                    clearInterval(pathInterval);
+                                }
+                            }, 50);
+                        } else {
+                            alert('No path found!');
+                        }
+                    });
+                } else {
+                    const path = bfs(startCell, endCell);
                     if (path) {
-                        let i = 0;
-                        pathInterval = setInterval(function() {
-                            if (i < path.length) {
-                                $('.visited, .frontier').removeClass('visited frontier');
-                                $('#' + path[i]).addClass('solution-path');
-                                i++;
-                            } else {
-                                clearInterval(pathInterval);
-                            }
-                        }, 50);
+                        path.forEach(cellId => {
+                            $('#' + cellId).addClass('solution-path');
+                        });
                     } else {
                         alert('No path found!');
                     }
-                });
+                }
             });
 
             $('#reset-button').on('click', function() {
@@ -312,13 +472,18 @@
             function newMaze() {
                 clearInterval(explorationInterval);
                 clearInterval(pathInterval);
+                clearInterval(generationInterval);
                 const size = parseInt($('#size-slider').val());
                 const complexity = parseInt($('#complexity-slider').val());
                 mazeGenerator.width = size;
                 mazeGenerator.height = size;
                 mazeGenerator.complexity = complexity;
-                mazeGenerator.generate();
-                mazeGenerator.display();
+                if ($('#animate-gen-toggle').is(':checked')) {
+                    mazeGenerator.animatedGenerate();
+                } else {
+                    mazeGenerator.generate();
+                    mazeGenerator.display();
+                }
                 $('#cell-size-slider').trigger('input');
             }
 
