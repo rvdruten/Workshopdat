@@ -102,6 +102,18 @@
             background: radial-gradient(circle 150px at 50% 50%, transparent, #000000dd 200px, #000000 300px);
             display: none;
         }
+        .rating-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .smiley {
+            font-size: 3em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .smiley:hover {
+            transform: scale(1.2);
+        }
     </style>
 </head>
 <body>
@@ -138,6 +150,13 @@
         <label for="hover-toggle">Hover Highlight:</label>
         <input type="checkbox" id="hover-toggle" checked>
     </div>
+    </div>
+    <div class="rating-container">
+        <span class="smiley" data-rating="1">😡</span>
+        <span class="smiley" data-rating="2">😠</span>
+        <span class="smiley" data-rating="3">😐</span>
+        <span class="smiley" data-rating="4">😊</span>
+        <span class="smiley" data-rating="5">😄</span>
     </div>
     <div id="maze-container"></div>
     <button id="generate-button">New Maze</button>
@@ -490,6 +509,17 @@
             $('#generate-button').on('click', newMaze);
 
             newMaze(); // Initial maze
+
+            $('.smiley').on('click', function() {
+                const rating = $(this).data('rating');
+                $('.smiley').each(function() {
+                    if ($(this).data('rating') <= rating) {
+                        $(this).css('filter', 'grayscale(0%)');
+                    } else {
+                        $(this).css('filter', 'grayscale(100%)');
+                    }
+                });
+            });
         });
     </script>
 </body>
